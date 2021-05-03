@@ -4,7 +4,12 @@
 /*  993413                                                                                       */
 /*  Various Utility Functions and Structures                                                     */
 /*************************************************************************************************/
+#include <time.h>
+#include <stdio.h>
+#include <string.h>
 #include "utils.h"
+
+#define TIMESTAMP_MAX_LEN 80
 
 /*  Writes the current timestamp to the given string buffer */
 void get_timestamp(char *str){

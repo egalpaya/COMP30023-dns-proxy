@@ -7,6 +7,8 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <stdint.h>
+
 #define MAX_DNAME_CHARS 255
 
 typedef struct dns_packet dns_packet_t;
