@@ -211,3 +211,30 @@ void print_message(message_t *message){
     }
 }
 
+/*  Frees a packet  */
+void free_packet(dns_packet_t *packet){
+
+    free(packet->data);
+    free(packet);
+}
+
+/*  Frees an array of pointers */
+void free_array(void **array, int num_items){
+
+    for (int i = 0; i < num_items; i++){
+        free(array[i]);
+    }
+    free(array);
+}
+
+/*  Frees a message */
+void free_message(message_t *msg){
+
+    free_array((void **)msg->questions, msg->header->qdcount);
+    free_array((void **)msg->answers, msg->header->ancount);
+    free_array((void **)msg->authorities, msg->header->nscount);
+    free_array((void **)msg->additional, msg->header->arcount);
+    free(msg->header);
+    free(msg);
+}
+

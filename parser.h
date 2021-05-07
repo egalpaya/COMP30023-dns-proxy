@@ -39,4 +39,13 @@ message_t *parse_packet(dns_packet_t *packet);
 /*  Prints information about a DNS record - for testing purposes    */
 void print_message(message_t *message);
 
+/*  Frees a packet  */
+void free_packet(dns_packet_t *packet);
+
+/*  Frees an array of pointers */
+void free_array(void **array, int num_items);
+
+/*  Frees a message */
+void free_message(message_t *msg);
+
 #endif
