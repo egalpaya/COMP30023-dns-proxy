@@ -18,6 +18,8 @@
 #include "connections.h"
 #include "cache.h"
 
+#define CACHE
+#define NONBLOCKING
 #define MAX_LOG_ENTRY 512
 #define INITIAL_SOCKET_CAP 8
 
