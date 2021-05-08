@@ -36,6 +36,9 @@ void *read_section(dns_packet_t *packet, uint16_t *byte_offset, int num_items,
 /*  Parses the given binary packet and returns a human-readable message struct  */
 message_t *parse_packet(dns_packet_t *packet);
 
+/*  Creates and returns a binary DNS packet representing the given header with an empty body    */
+uint8_t *create_header_packet(dns_header_t *header);
+
 /*  Prints information about a DNS record - for testing purposes    */
 void print_message(message_t *message);
 

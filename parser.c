@@ -20,9 +20,9 @@ void cpy_int_field(dns_packet_t *packet, uint16_t *byte_offset, int n, void *des
     memcpy(dest, &(packet->data[*byte_offset]), n);
 
     if (n == 4){
-        *(uint32_t *)dest = htonl(*(uint32_t *)dest);
+        *(uint32_t *)dest = ntohl(*(uint32_t *)dest);
     } else if (n == 2){
-        *(uint16_t *)dest = htons(*(uint16_t *)dest);
+        *(uint16_t *)dest = ntohs(*(uint16_t *)dest);
     }
 
     *(byte_offset) += n;
@@ -103,7 +103,7 @@ dns_header_t *read_header(dns_packet_t *packet){
 
     // The data starts at byte 2 (first 2 bytes are length)
     memcpy(&(header->id), &(packet->data[2]), 2);
-    header->id = htons(header->id);
+    header->id = ntohs(header->id);
     
     // byte 4 bit 0
     header->qr = packet->data[4] >> 7;
@@ -121,16 +121,16 @@ dns_header_t *read_header(dns_packet_t *packet){
     header->rcode = packet->data[5] & 15;
 
     memcpy(&(header->qdcount), &(packet->data[6]), 2);
-    header->qdcount = htons(header->qdcount);
+    header->qdcount = ntohs(header->qdcount);
 
     memcpy(&(header->ancount), &(packet->data[8]), 2);
-    header->ancount = htons(header->ancount);
+    header->ancount = ntohs(header->ancount);
 
     memcpy(&(header->nscount), &(packet->data[10]), 2);
-    header->nscount = htons(header->nscount);
+    header->nscount = ntohs(header->nscount);
 
     memcpy(&(header->arcount), &(packet->data[12]), 2);
-    header->arcount = htons(header->arcount);
+    header->arcount = ntohs(header->arcount);
 
     return header;
 }
@@ -141,7 +141,7 @@ dns_packet_t *read_packet(int fd){
     // read the two byte header
     uint16_t len_n;
     assert(read(fd, &len_n, 2) == 2);
-    uint16_t len_h = htons(len_n);
+    uint16_t len_h = ntohs(len_n);
     
     // create struct and allocate memory
     dns_packet_t *packet = (dns_packet_t *)malloc(sizeof(dns_packet_t));
@@ -154,9 +154,9 @@ dns_packet_t *read_packet(int fd){
     // copy the length bytes
     memcpy(&(packet->data[0]), &len_n, 2);
 
-    // read in payload bytes from stream
-    for (int i = 2; i < len_h; i++){
-        if ((read(fd, &packet->data[i], 1)) != 1){
+    // read in payload bytes from stream (indexing is offset by 2)
+    for (int i = 0; i < len_h; i++){
+        if ((read(fd, &packet->data[i+2], 1)) != 1){
             fprintf(stderr, "error reading packet\n");
             return NULL;
         }
@@ -221,6 +221,40 @@ void print_message(message_t *message){
     for (int i = 0; i < message->header->arcount; i++){
         printf("RR Additional: name: %s, type = %d, class = %d, ttl = %d, rdlength = %d\n", message->additional[i]->name, message->additional[i]->type, message->additional[i]->class, message->additional[i]->ttl, message->additional[i]->rdlength);
     }
+}
+
+/*  Creates and returns a binary DNS packet representing the given header with an empty body    */
+uint8_t *create_header_packet(dns_header_t *header){
+
+    uint8_t *packet = (uint8_t *)malloc(sizeof(uint8_t)*HEADER_LEN);
+
+    uint16_t len = htons(HEADER_LEN - 2);
+    memcpy(&(packet[0]), &len, 2);
+    
+    uint16_t id = htons(header->id);
+    memcpy(&(packet[2]), &id, 2);
+
+    // byte 4 bit 0
+    packet[4] = header->qr << 7;
+    // byte 4 bits 1-4 (15 = 0b00001111)
+    packet[4] = packet[4] & (header->opcode << 3);
+    // byte 4 bit 5
+    packet[4] = packet[4] & (header->aa << 2);
+    // byte 4 bit 6
+    packet[4] = packet[4] & (header->tc << 1);
+    // byte 4 bit 7
+    packet[4] = packet[4] & (header->rd);
+    // byte 5 bit 0
+    packet[5] = header->ra << 7;
+    // byte 5 bits 4-7 
+    packet[5] = packet[5] & (header->rcode);
+
+    memset(&(packet[6]), 0, 2);
+    memset(&(packet[8]), 0, 2);
+    memset(&(packet[10]), 0, 2);
+    memset(&(packet[12]), 0, 2);
+
+    return packet;
 }
 
 /*  Frees a packet  */
