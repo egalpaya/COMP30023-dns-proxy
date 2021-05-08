@@ -12,7 +12,7 @@
 #include <unistd.h>
 #include "parser.h"
 
-#define HEADER_LEN 12
+#define HEADER_LEN 14   // includes 2 byte message length
 
 /*  Copies n bytes (as ints) from the packet to dest, incrementing the offset   */
 void cpy_int_field(dns_packet_t *packet, uint16_t *byte_offset, int n, void *dest){
@@ -49,11 +49,14 @@ void *read_RR(dns_packet_t *packet, uint16_t *byte_offset){
 
     memset(rr->name, 0, MAX_DNAME_CHARS);
 
+    // Check if message compression is used (2 leading bits of byte are both 1)
+    // Note: 3 = 0b00000011
     if (packet->data[*byte_offset] >> 6 == 3){
-        // message compression is used 
+
         uint16_t pointer; 
         cpy_int_field(packet, byte_offset, 2, &pointer);
-        // remove 2 leading bits (which indicate compression)
+
+        // remove 2 leading bits (NOTE 16383 = 0b0011111111111111)
         pointer = pointer & 16383;
         read_domain_name(packet, &pointer, rr->name);
     } else {
@@ -98,33 +101,35 @@ dns_header_t *read_header(dns_packet_t *packet){
     dns_header_t *header = (dns_header_t *)malloc(sizeof(dns_header_t));
     assert(header);
 
-    memcpy(&(header->id), &(packet->data[0]), 2);
+    // The data starts at byte 2 (first 2 bytes are length)
+    memcpy(&(header->id), &(packet->data[2]), 2);
     header->id = htons(header->id);
     
-    header->qr = packet->data[2] >> 7;
-    
-    header->opcode = (packet->data[2] >> 3) & 15;
+    // byte 4 bit 0
+    header->qr = packet->data[4] >> 7;
+    // byte 4 bits 1-4 (15 = 0b00001111)
+    header->opcode = (packet->data[4] >> 3) & 15;
+    // byte 4 bit 5
+    header->aa = (packet->data[4] >> 2) & 1;
+    // byte 4 bit 6
+    header->tc = (packet->data[4] >> 1) & 1;
+    // byte 4 bit 7
+    header->rd = packet->data[4] & 1;
+    // byte 5 bit 0
+    header->ra = packet->data[5] >> 7;
+    // byte 5 bits 4-7 (15 = 0b00001111)
+    header->rcode = packet->data[5] & 15;
 
-    header->aa = (packet->data[2] >> 2) & 1;
-
-    header->tc = (packet->data[2] >> 1) & 1;
-
-    header->rd = packet->data[2] & 1;
-
-    header->ra = packet->data[3] >> 7;
-
-    header->rcode = packet->data[3] & 15;
-
-    memcpy(&(header->qdcount), &(packet->data[4]), 2);
+    memcpy(&(header->qdcount), &(packet->data[6]), 2);
     header->qdcount = htons(header->qdcount);
 
-    memcpy(&(header->ancount), &(packet->data[6]), 2);
+    memcpy(&(header->ancount), &(packet->data[8]), 2);
     header->ancount = htons(header->ancount);
 
-    memcpy(&(header->nscount), &(packet->data[8]), 2);
+    memcpy(&(header->nscount), &(packet->data[10]), 2);
     header->nscount = htons(header->nscount);
 
-    memcpy(&(header->arcount), &(packet->data[10]), 2);
+    memcpy(&(header->arcount), &(packet->data[12]), 2);
     header->arcount = htons(header->arcount);
 
     return header;
@@ -134,20 +139,27 @@ dns_header_t *read_header(dns_packet_t *packet){
 dns_packet_t *read_packet(int fd){
 
     // read the two byte header
-    uint16_t len;
-    assert(read(fd, &len, 2) == 2);
-    len = htons(len);
+    uint16_t len_n;
+    assert(read(fd, &len_n, 2) == 2);
+    uint16_t len_h = htons(len_n);
     
     // create struct and allocate memory
     dns_packet_t *packet = (dns_packet_t *)malloc(sizeof(dns_packet_t));
     assert(packet);
-    packet->len = len;
-    packet->data = (uint8_t *)malloc(sizeof(uint8_t)*len);
-    assert(packet->data);
-    
-    // read in bytes from stream
-    for (int i = 0; i < len; i++){
-        assert(read(fd, &packet->data[i], 1) == 1);
+    packet->len = len_h;
+    // we will include the 2 bytes defining message length
+    packet->data = (uint8_t *)malloc(sizeof(uint8_t)*(len_h+2));
+    assert(packet->data); 
+
+    // copy the length bytes
+    memcpy(&(packet->data[0]), &len_n, 2);
+
+    // read in payload bytes from stream
+    for (int i = 0; i < len_h; i++){
+        if ((read(fd, &packet->data[i], 1)) != 1){
+            fprintf(stderr, "error reading packet\n");
+            return NULL;
+        }
     }
 
     return packet;
