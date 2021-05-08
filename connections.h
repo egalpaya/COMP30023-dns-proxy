@@ -24,13 +24,6 @@ int connect_client(int listener_fd);
     connection to upstream server   */
 int forward_packet(char **argv, dns_packet_t *packet);
 
-/*  Receive a query from downstream    */
-dns_packet_t *get_query(int conn_fd);
-
-/*  Receives a response from the upstream server and closes the connection, returning the
-    packet  */
-dns_packet_t *get_response(int conn_fd);
-
 /*  Send the final response downstream and close connection  */
 void send_response(int conn_fd, dns_packet_t *packet);
 

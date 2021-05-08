@@ -139,32 +139,7 @@ int forward_packet(char **argv, dns_packet_t *packet){
         return -1;
     }
 
-    message_t *msg = parse_packet(packet);
-    printf("message sent upstream:\n");
-    //print_message(msg);
     return upstream_fd;
-}
-
-/*  Receive a query from downstream    */
-dns_packet_t *get_query(int conn_fd){
-
-    dns_packet_t *packet = read_packet(conn_fd);
-    message_t *msg = parse_packet(packet);
-    printf("message received from client:\n");
-    //print_message(msg);
-    return packet;
-}
-
-/*  Receives a response from the upstream server and closes the connection, returning the
-    packet  */
-dns_packet_t *get_response(int conn_fd){
-
-    dns_packet_t *packet = read_packet(conn_fd);
-    message_t *msg = parse_packet(packet);
-    printf("message received from upstream:\n");
-    //print_message(msg);
-    close(conn_fd);
-    return packet;
 }
 
 void get_response2(int conn_fd){
@@ -172,7 +147,8 @@ void get_response2(int conn_fd){
     uint8_t *buf = malloc(sizeof(uint8_t)*500);
 
     int i = 0;
-    while(1){
+    while(i < 55){
+        printf("reading...\n");
         if ((read(conn_fd, &(buf[i++]), 1)) != 1){
             break;
         }
@@ -182,7 +158,7 @@ void get_response2(int conn_fd){
         if (j % 16 == 0){
             printf("\n");
         }
-        printf("%x ", buf[j]);
+        printf("%02x ", buf[j]);
     }
     printf("\n");
     free(buf);
@@ -199,9 +175,6 @@ void send_response(int conn_fd, dns_packet_t *packet){
         return;
     }
 
-    message_t *msg = parse_packet(packet);
-    printf("message sent back to client:\n");
-    //print_message(msg);
     free_packet(packet);
     close(conn_fd);
 }
