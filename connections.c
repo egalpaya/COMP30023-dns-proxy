@@ -132,13 +132,16 @@ int forward_packet(char **argv, dns_packet_t *packet){
         close(upstream_fd);
         return -1;
     }
-
+    
     // Send the packet in one go
-    if ((n = send(upstream_fd, packet->data, packet->len, 0)) != packet->len){
+    if ((n = send(upstream_fd, packet->data, packet->len + 2, 0)) != packet->len + 2){
         perror("send - upstream");
         return -1;
     }
 
+    message_t *msg = parse_packet(packet);
+    printf("message sent upstream:\n");
+    //print_message(msg);
     return upstream_fd;
 }
 
@@ -146,6 +149,9 @@ int forward_packet(char **argv, dns_packet_t *packet){
 dns_packet_t *get_query(int conn_fd){
 
     dns_packet_t *packet = read_packet(conn_fd);
+    message_t *msg = parse_packet(packet);
+    printf("message received from client:\n");
+    //print_message(msg);
     return packet;
 }
 
@@ -154,8 +160,32 @@ dns_packet_t *get_query(int conn_fd){
 dns_packet_t *get_response(int conn_fd){
 
     dns_packet_t *packet = read_packet(conn_fd);
+    message_t *msg = parse_packet(packet);
+    printf("message received from upstream:\n");
+    //print_message(msg);
     close(conn_fd);
     return packet;
+}
+
+void get_response2(int conn_fd){
+
+    uint8_t *buf = malloc(sizeof(uint8_t)*500);
+
+    int i = 0;
+    while(1){
+        if ((read(conn_fd, &(buf[i++]), 1)) != 1){
+            break;
+        }
+    }
+    printf("%d bytes read\n", i);
+    for (int j = 0; j < i; j++){
+        if (j % 16 == 0){
+            printf("\n");
+        }
+        printf("%x ", buf[j]);
+    }
+    printf("\n");
+    free(buf);
 }
 
 /*  Send the final response downstream and close connection  */
@@ -164,11 +194,14 @@ void send_response(int conn_fd, dns_packet_t *packet){
     int n;
 
     // Send the packet in one go
-    if ((n = send(conn_fd, packet->data, packet->len, 0)) != packet->len){
+    if ((n = send(conn_fd, packet->data, packet->len + 2, 0)) != packet->len + 2){
         perror("send - downstream");
         return;
     }
 
+    message_t *msg = parse_packet(packet);
+    printf("message sent back to client:\n");
+    //print_message(msg);
     free_packet(packet);
     close(conn_fd);
 }
@@ -207,5 +240,5 @@ void delete_fd(int index, struct pollfd **fds, nfds_t *nfds){
     (*fds)[index] = (*fds)[*nfds - 2];
     (*fds)[index+1] = (*fds)[*nfds -1];
 
-    nfds -= 2;
+    (*nfds) -= 2;
 }

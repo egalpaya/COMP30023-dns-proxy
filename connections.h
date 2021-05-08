@@ -43,4 +43,6 @@ void add_fd(int fd, struct pollfd **fds, nfds_t *nfds, int *capacity);
 /* Removes the two consecutive entries from pollfd array */
 void delete_fd(int index, struct pollfd **fds, nfds_t *nfds);
 
+void get_response2(int conn_fd);
+
 #endif

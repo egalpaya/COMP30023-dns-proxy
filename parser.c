@@ -155,7 +155,7 @@ dns_packet_t *read_packet(int fd){
     memcpy(&(packet->data[0]), &len_n, 2);
 
     // read in payload bytes from stream
-    for (int i = 0; i < len_h; i++){
+    for (int i = 2; i < len_h; i++){
         if ((read(fd, &packet->data[i], 1)) != 1){
             fprintf(stderr, "error reading packet\n");
             return NULL;

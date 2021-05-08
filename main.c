@@ -74,31 +74,43 @@ void run_server(char **argv){
         for (int i = 0; i < nfds; i++){
 
             if (fds[i].revents & POLLIN){
-
+                printf("i = %d, fd = %d\n", i, fds[i].fd);
                 if (fds[i].fd == listener_fd){
                     printf("received client connection...\n");
                     // Listener has a downstream client ready to connect, so accept and add to array
                     int client_fd = connect_client(listener_fd);
                     add_fd(client_fd, &fds, &nfds, &capacity);
+                    break;
                 } else if (i % 2 == 0) {
-                    printf("accepting packet from client...\n");
                     // Even index means this is a downstream client
                     dns_packet_t *packet = get_query(fds[i].fd);
-                    printf("forwarding packet upstream...\n");
+                    printf("accepted packet from client...\n");
                     int upstream_fd = forward_packet(argv, packet);
                     fds[i+1].fd = upstream_fd;
                     printf("forwarded packet upstream...\n");
-                } else {
-                    printf("receiving response from upstream...\n");
+                    printf("upstream+_fd = %d, nfds = %d, i = %d\n", upstream_fd, (int)nfds, i+1);
                     // This is a response from the upstream connection
-                    dns_packet_t *response = get_response(fds[i].fd);
-                    
-                    printf("sending back to client...\n");
+                    dns_packet_t *response = get_response(fds[i+1].fd);
+                    printf("received response from upstream...\n");
+
                     // Send it back to client
-                    send_response(fds[i-1].fd, response);
-                    
+                    send_response(fds[i].fd, response);
+                    printf("sent back to client...\n");
                     // Remove the now closed connections from array
-                    delete_fd(i-1, &fds, &nfds);
+                    delete_fd(i, &fds, &nfds);
+                    break;
+                } else {
+                    // printf("receiving response from upstream...\n");
+                    // // This is a response from the upstream connection
+                    // dns_packet_t *response = get_response(fds[i].fd);
+                    
+                    // printf("sending back to client...\n");
+                    // // Send it back to client
+                    // send_response(fds[i-1].fd, response);
+                    
+                    // // Remove the now closed connections from array
+                    // delete_fd(i-1, &fds, &nfds);
+                    break;
                 }
             }
         }
