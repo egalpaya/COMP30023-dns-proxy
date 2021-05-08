@@ -16,6 +16,7 @@
 #include "utils.h"
 #include "parser.h"
 #include "connections.h"
+#include "cache.h"
 
 #define MAX_LOG_ENTRY 512
 #define INITIAL_SOCKET_CAP 8
@@ -63,6 +64,8 @@ void run_server(char **argv){
 
     int listener_fd = create_listener();
     add_fd(listener_fd, &fds, &nfds, &capacity);
+
+    cache_t *cache = create_cache();
     
     while (1){
 
@@ -86,6 +89,15 @@ void run_server(char **argv){
                     dns_packet_t *packet = read_packet(fds[i].fd);
                     message_t *msg = parse_packet(packet);
                     process_message(msg);
+
+                    dns_packet_t *cache_entry = get_cache_entry(cache, msg);
+
+                    if (cache_entry){
+                        // response exists in cache, so send it back and close connections
+                        send_response(fds[i].fd, cache_entry);
+                        delete_fd(i, &fds, &nfds);
+                        continue;
+                    }
 
                     int upstream_fd = forward_packet(argv, packet);
                     fds[i+1].fd = upstream_fd;
