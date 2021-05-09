@@ -11,7 +11,6 @@
 #include "utils.h"
 #include "parser.h"
 
-#define MAX_LOG_ENTRY 512
 
 void remove_trailing_dot(char *str){
 
