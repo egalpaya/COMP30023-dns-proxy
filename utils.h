@@ -10,6 +10,8 @@
 #include <stdint.h>
 
 #define MAX_DNAME_CHARS 255
+#define MAX_TIMESTAMP_LEN 80
+#define MAX_LOG_ENTRY 1024
 
 typedef struct dns_packet dns_packet_t;
 typedef struct dns_header dns_header_t;
@@ -62,12 +64,17 @@ struct message {
 
 
 
+/*  Writes the given time to str, formatted as a timestamp  */
+void get_timestamp(char *str, time_t time);
+
 /*  Writes the current timestamp to the given string buffer */
-void get_timestamp(char *str);
+void get_current_timestamp(char *str);
 
 /*  Writes a string to the log, prepended by a timestamp    */
 void write_log(char *str);
 
+/*  Removes trailing dot in a string (for fully specified domain names) */
+void remove_trailing_dot(char *str);
 
 
 

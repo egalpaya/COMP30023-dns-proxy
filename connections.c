@@ -142,28 +142,6 @@ int forward_packet(char **argv, dns_packet_t *packet){
     return upstream_fd;
 }
 
-void get_response2(int conn_fd){
-
-    uint8_t *buf = malloc(sizeof(uint8_t)*500);
-
-    int i = 0;
-    while(i < 55){
-        printf("reading...\n");
-        if ((read(conn_fd, &(buf[i++]), 1)) != 1){
-            break;
-        }
-    }
-    printf("%d bytes read\n", i);
-    for (int j = 0; j < i; j++){
-        if (j % 16 == 0){
-            printf("\n");
-        }
-        printf("%02x ", buf[j]);
-    }
-    printf("\n");
-    free(buf);
-}
-
 /*  Send the final response downstream and close connection  */
 void send_response(int conn_fd, dns_packet_t *packet){
 
@@ -175,7 +153,6 @@ void send_response(int conn_fd, dns_packet_t *packet){
         return;
     }
 
-    free_packet(packet);
     close(conn_fd);
 }
 

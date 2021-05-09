@@ -20,36 +20,40 @@
 
 #define CACHE
 #define NONBLOCKING
-#define MAX_LOG_ENTRY 512
 #define INITIAL_SOCKET_CAP 8
 
-void remove_trailing_dot(char *str){
+/*  Examines given query and returns 0 if it is AAAA, -1 otherwise, writing to log as well  */
+int process_query(message_t *query){
 
-    char *last_dot = strrchr(str, '.');
-    *last_dot = '\0';
+    char buffer[MAX_LOG_ENTRY];
+    char name[MAX_DNAME_CHARS];
+    int success;
+
+    if (query->header->qdcount && query->questions[0]->qtype == 28){
+        strcpy(name, query->questions[0]->qname);
+        remove_trailing_dot(name);
+        snprintf(buffer, MAX_LOG_ENTRY, "requested %s\n", name);
+        success = 0;
+    } else {
+        snprintf(buffer, MAX_LOG_ENTRY, "unimplemented request\n");
+        success = -1;
+    }
+
+    write_log(buffer);
+    return success;
 }
 
-void process_message(message_t *msg){
+void process_response(message_t *msg){
 
     char buffer[MAX_LOG_ENTRY];
     char ip[INET6_ADDRSTRLEN];
     char name[MAX_DNAME_CHARS];
 
-    if (msg->header->qr == 0){
-        if (msg->header->qdcount && msg->questions[0]->qtype == 28){
-            strcpy(name, msg->questions[0]->qname);
-            remove_trailing_dot(name);
-            snprintf(buffer, MAX_LOG_ENTRY, "requested %s\n", name);
-        } else {
-            snprintf(buffer, MAX_LOG_ENTRY, "unimplemented request\n");
-        }
-    } else {
-        if (msg->header->ancount && msg->answers[0]->type == 28){
-            strcpy(name, msg->answers[0]->name);
-            remove_trailing_dot(name);
-            inet_ntop(AF_INET6, msg->answers[0]->rdata, ip, INET6_ADDRSTRLEN);
-            snprintf(buffer, MAX_LOG_ENTRY, "%s is at %s\n", name, ip);
-        }
+    if (msg->header->ancount && msg->answers[0]->type == 28){
+        strcpy(name, msg->answers[0]->name);
+        remove_trailing_dot(name);
+        inet_ntop(AF_INET6, msg->answers[0]->rdata, ip, INET6_ADDRSTRLEN);
+        snprintf(buffer, MAX_LOG_ENTRY, "%s is at %s\n", name, ip);
     }
 
     write_log(buffer);
@@ -90,30 +94,51 @@ void run_server(char **argv){
 
                     dns_packet_t *packet = read_packet(fds[i].fd);
                     message_t *msg = parse_packet(packet);
-                    process_message(msg);
 
+                    // If request is unimplemented, send back a packet with rcode 4
+                    if ((process_query(msg)) == -1){
+                        dns_header_t *response_header = create_error_header(msg->header->id);
+                        dns_packet_t *response_packet = create_header_packet(response_header);
+                        send_response(fds[i].fd, response_packet);
+                        delete_fd(i, &fds, &nfds);
+                        free_packet(response_packet);
+                        free(response_header);
+                        continue;
+                    }
+                    
+                    // Check the cache
                     dns_packet_t *cache_entry = get_cache_entry(cache, msg);
-
                     if (cache_entry){
                         // response exists in cache, so send it back and close connections
+                        message_t *response = parse_packet(cache_entry);
+                        process_response(response);
                         send_response(fds[i].fd, cache_entry);
                         delete_fd(i, &fds, &nfds);
+                        free_message(response);
                         continue;
                     }
 
+                    // Last resort, forward upstream
                     int upstream_fd = forward_packet(argv, packet);
                     fds[i+1].fd = upstream_fd;
 
+                    free_packet(packet);
+                    free_message(msg);
                     break;
                 } else {
                     // This must be a response from the upstream connection
-                    dns_packet_t *response = read_packet(fds[i].fd);
+                    dns_packet_t *response_packet = read_packet(fds[i].fd);
                     close(fds[i].fd);
-                    // Send it back to client
-                    send_response(fds[i-1].fd, response);
+
+                    // Process it and send it back to client
+                    message_t *response = parse_packet(response_packet);
+                    process_response(response);
+                    send_response(fds[i-1].fd, response_packet);
                     
                     // Remove the now closed connections from array
                     delete_fd(i-1, &fds, &nfds);
+                    free_packet(response_packet);
+                    free_message(response);
                     break;
                 }
             }

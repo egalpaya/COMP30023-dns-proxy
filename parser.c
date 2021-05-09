@@ -224,37 +224,64 @@ void print_message(message_t *message){
 }
 
 /*  Creates and returns a binary DNS packet representing the given header with an empty body    */
-uint8_t *create_header_packet(dns_header_t *header){
+dns_packet_t *create_header_packet(dns_header_t *header){
 
-    uint8_t *packet = (uint8_t *)malloc(sizeof(uint8_t)*HEADER_LEN);
+    dns_packet_t *packet = (dns_packet_t *)malloc(sizeof(dns_packet_t));
+    assert(packet);
+
+    packet->len = HEADER_LEN;
+    packet->data = (uint8_t *)malloc(sizeof(uint8_t)*HEADER_LEN);
+    assert(packet->data);
 
     uint16_t len = htons(HEADER_LEN - 2);
-    memcpy(&(packet[0]), &len, 2);
+    memcpy(&(packet->data[0]), &len, 2);
     
     uint16_t id = htons(header->id);
-    memcpy(&(packet[2]), &id, 2);
+    memcpy(&(packet->data[2]), &id, 2);
 
     // byte 4 bit 0
-    packet[4] = header->qr << 7;
+    packet->data[4] = header->qr << 7;
     // byte 4 bits 1-4 (15 = 0b00001111)
-    packet[4] = packet[4] & (header->opcode << 3);
+    packet->data[4] = packet->data[4] & (header->opcode << 3);
     // byte 4 bit 5
-    packet[4] = packet[4] & (header->aa << 2);
+    packet->data[4] = packet->data[4] & (header->aa << 2);
     // byte 4 bit 6
-    packet[4] = packet[4] & (header->tc << 1);
+    packet->data[4] = packet->data[4] & (header->tc << 1);
     // byte 4 bit 7
-    packet[4] = packet[4] & (header->rd);
+    packet->data[4] = packet->data[4] & (header->rd);
     // byte 5 bit 0
-    packet[5] = header->ra << 7;
+    packet->data[5] = header->ra << 7;
     // byte 5 bits 4-7 
-    packet[5] = packet[5] & (header->rcode);
+    packet->data[5] = packet->data[5] & (header->rcode);
 
-    memset(&(packet[6]), 0, 2);
-    memset(&(packet[8]), 0, 2);
-    memset(&(packet[10]), 0, 2);
-    memset(&(packet[12]), 0, 2);
+    memset(&(packet->data[6]), 0, 2);
+    memset(&(packet->data[8]), 0, 2);
+    memset(&(packet->data[10]), 0, 2);
+    memset(&(packet->data[12]), 0, 2);
 
     return packet;
+}
+
+/*  Creates a header with RCODE = 4, signifying unimplemented request   */
+dns_header_t *create_error_header(int id){
+
+    dns_header_t *header = (dns_header_t *)malloc(sizeof(dns_header_t));
+    assert(header);
+
+    header->id = id;
+    header->qr = 1;
+    header->opcode = 0;
+    header->aa = 0;
+    header->tc = 0;
+    header->rd = 0;
+    header->ra = 0;
+    header->rcode = 4;
+    header->qdcount = 0;
+    header->ancount = 0;
+    header->nscount = 0;
+    header->arcount = 0;
+
+    return header;
 }
 
 /*  Frees a packet  */

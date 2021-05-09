@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include "cache.h"
 #include "parser.h"
+#include "utils.h"
 
 #define CACHE_SIZE 5
 
@@ -66,6 +67,16 @@ void add_cache_entry(cache_t *cache, message_t *response, dns_packet_t *packet){
     cache_entry_t *old_entry = cache->entries[index];
     cache->entries[index] = entry;
 
+    // write to log
+    char buf[MAX_LOG_ENTRY];
+    char name1[MAX_DNAME_CHARS], name2[MAX_DNAME_CHARS];
+    strcpy(name1, old_entry->response->questions[0]->qname);
+    strcpy(name2, entry->response->questions[0]->qname);
+    remove_trailing_dot(name1);
+    remove_trailing_dot(name2);
+    snprintf(buf, MAX_LOG_ENTRY, "replacing %s by %s\n", name1, name2);
+    write_log(buf);
+
     free_message(old_entry->response);
     free_packet(old_entry->packet);
     free(old_entry);
@@ -101,6 +112,17 @@ dns_packet_t *get_cache_entry(cache_t *cache, message_t *query){
             // replace id of packet with id of query 
             uint16_t id = htons(query->header->id);
             memcpy(&(response_packet[2]), &id, 2); // id field starts at byte 2, after length field
+
+            // write to log
+            char buf[MAX_LOG_ENTRY];
+            char name[MAX_DNAME_CHARS];
+            char timestamp[MAX_TIMESTAMP_LEN];
+            get_timestamp(timestamp, cache->entries[i]->arrival_time +
+                                    cache->entries[i]->response->answers[0]->ttl);
+            strcpy(name, cache->entries[i]->response->questions[0]->qname);
+            remove_trailing_dot(name);
+            snprintf(buf, MAX_LOG_ENTRY, "%s expires at %s\n", name, timestamp);
+            write_log(buf);
         }
     }
 
