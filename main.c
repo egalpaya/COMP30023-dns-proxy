@@ -50,7 +50,7 @@ void process_response(message_t *msg){
     char name[MAX_DNAME_CHARS];
 
     if (msg->header->ancount && msg->answers[0]->type == 28){
-        strcpy(name, msg->answers[0]->name);
+        strcpy(name, msg->questions[0]->qname);
         remove_trailing_dot(name);
         inet_ntop(AF_INET6, msg->answers[0]->rdata, ip, INET6_ADDRSTRLEN);
         snprintf(buffer, MAX_LOG_ENTRY, "%s is at %s\n", name, ip);
