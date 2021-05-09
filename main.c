@@ -130,9 +130,12 @@ void run_server(char **argv){
                     dns_packet_t *response_packet = read_packet(fds[i].fd);
                     close(fds[i].fd);
 
-                    // Process it and send it back to client
+                    // Process it and add it to cache
                     message_t *response = parse_packet(response_packet);
                     process_response(response);
+                    add_cache_entry(cache, response, response_packet);
+
+                    // Send back to client
                     send_response(fds[i-1].fd, response_packet);
                     
                     // Remove the now closed connections from array
