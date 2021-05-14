@@ -88,7 +88,6 @@ int get_ttl(cache_entry_t *entry){
 
     time_t curr_time;
     time(&curr_time);
-
     double diff = difftime(curr_time, entry->arrival_time);
     int ttl = entry->response->answers[0]->ttl;
 
@@ -111,7 +110,7 @@ dns_packet_t *get_cache_entry(cache_t *cache, message_t *query){
 
             // replace id of packet with id of query 
             uint16_t id = htons(query->header->id);
-            memcpy(&(response_packet[2]), &id, 2); // id field starts at byte 2, after length field
+            memcpy(&(response_packet->data[2]), &id, 2); // id field starts at byte 2, after length field
 
             // write to log
             char buf[MAX_LOG_ENTRY];
@@ -123,6 +122,7 @@ dns_packet_t *get_cache_entry(cache_t *cache, message_t *query){
             remove_trailing_dot(name);
             snprintf(buf, MAX_LOG_ENTRY, "%s expires at %s\n", name, timestamp);
             write_log(buf);
+            break;
         }
     }
 
@@ -135,4 +135,11 @@ int compare_questions(question_t *q1, question_t *q2){
     return ((strcmp(q1->qname, q2->qname) == 0) && 
             (q1->qtype == q2->qtype) && 
             (q1->qclass == q2->qclass));
+}
+
+void print_cache(cache_t *cache){
+    printf("printing cache...\n");
+    for (int i = 0; i < cache->num_items; i++){
+        print_message(cache->entries[i]->response);
+    }
 }

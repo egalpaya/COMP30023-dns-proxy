@@ -83,7 +83,7 @@ void run_server(char **argv){
         for (int i = 0; i < nfds; i++){
 
             if (fds[i].revents & POLLIN){
-
+            
                 if (fds[i].fd == listener_fd){
                     // Listener has a downstream client ready to connect, so accept and add to array
                     int client_fd = connect_client(listener_fd);
@@ -130,18 +130,20 @@ void run_server(char **argv){
                     dns_packet_t *response_packet = read_packet(fds[i].fd);
                     close(fds[i].fd);
 
-                    // Process it and add it to cache
+                    // Process it and add it to cache if an answer is found
                     message_t *response = parse_packet(response_packet);
                     process_response(response);
-                    add_cache_entry(cache, response, response_packet);
 
+                    if (response->header->ancount){
+                        add_cache_entry(cache, response, response_packet);
+                    }
                     // Send back to client
                     send_response(fds[i-1].fd, response_packet);
                     
                     // Remove the now closed connections from array
                     delete_fd(i-1, &fds, &nfds);
-                    free_packet(response_packet);
-                    free_message(response);
+                    // free_packet(response_packet);
+                    // free_message(response);
                     break;
                 }
             }
