@@ -54,9 +54,8 @@ void process_response(message_t *msg){
         remove_trailing_dot(name);
         inet_ntop(AF_INET6, msg->answers[0]->rdata, ip, INET6_ADDRSTRLEN);
         snprintf(buffer, MAX_LOG_ENTRY, "%s is at %s\n", name, ip);
+        write_log(buffer);
     }
-
-    write_log(buffer);
 }
 
 

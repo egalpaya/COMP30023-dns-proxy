@@ -17,6 +17,7 @@ struct cache_entry {
     message_t *response;
     dns_packet_t *packet;
     time_t arrival_time;
+    int ttl;
 };
 
 struct cache {

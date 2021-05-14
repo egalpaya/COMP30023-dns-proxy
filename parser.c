@@ -311,3 +311,5 @@ void free_message(message_t *msg){
     free(msg);
 }
 
+// TODO: Write functions that create a binary packet from a message struct
+
