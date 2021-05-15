@@ -223,29 +223,6 @@ void print_message(message_t *message){
     }
 }
 
-
-/*  Creates a header with RCODE = 4, signifying unimplemented request   */
-dns_header_t *create_error_header(int id){
-
-    dns_header_t *header = (dns_header_t *)malloc(sizeof(dns_header_t));
-    assert(header);
-
-    header->id = id;
-    header->qr = 1;
-    header->opcode = 0;
-    header->aa = 0;
-    header->tc = 0;
-    header->rd = 0;
-    header->ra = 0;
-    header->rcode = 4;
-    header->qdcount = 0;
-    header->ancount = 0;
-    header->nscount = 0;
-    header->arcount = 0;
-
-    return header;
-}
-
 /*  Frees a packet  */
 void free_packet(dns_packet_t *packet){
 

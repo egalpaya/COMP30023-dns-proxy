@@ -36,9 +36,6 @@ void *read_section(dns_packet_t *packet, uint16_t *byte_offset, int num_items,
 /*  Parses the given binary packet and returns a human-readable message struct  */
 message_t *parse_packet(dns_packet_t *packet);
 
-/*  Creates a header with RCODE = 4, signifying unimplemented request   */
-dns_header_t *create_error_header(int id);
-
 /*  Creates a binary DNS packet from the provided DNS message. Inverse of parse_packet()    
     Does not use message compression                                                        */                               
 dns_packet_t *create_packet(message_t *msg);
