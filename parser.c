@@ -12,7 +12,7 @@
 #include <unistd.h>
 #include "parser.h"
 
-#define HEADER_LEN 14   // includes 2 byte message length
+#define HEADER_LEN 12   // includes 2 byte message length
 
 /*  Copies n bytes (as ints) from the packet to dest, incrementing the offset   */
 void cpy_int_field(dns_packet_t *packet, uint16_t *byte_offset, int n, void *dest){
@@ -191,7 +191,7 @@ message_t *parse_packet(dns_packet_t *packet){
     assert(msg);
 
     msg->header = read_header(packet);
-    uint16_t byte_offset = HEADER_LEN;
+    uint16_t byte_offset = HEADER_LEN + 2; // +2 for the length bytes
 
     msg->questions = read_section(packet, &byte_offset, msg->header->qdcount, read_question);
     msg->answers = read_section(packet, &byte_offset, msg->header->ancount, read_RR);
@@ -223,44 +223,6 @@ void print_message(message_t *message){
     }
 }
 
-/*  Creates and returns a binary DNS packet representing the given header with an empty body    */
-dns_packet_t *create_header_packet(dns_header_t *header){
-
-    dns_packet_t *packet = (dns_packet_t *)malloc(sizeof(dns_packet_t));
-    assert(packet);
-
-    packet->len = HEADER_LEN;
-    packet->data = (uint8_t *)malloc(sizeof(uint8_t)*HEADER_LEN);
-    assert(packet->data);
-
-    uint16_t len = htons(HEADER_LEN - 2);
-    memcpy(&(packet->data[0]), &len, 2);
-    
-    uint16_t id = htons(header->id);
-    memcpy(&(packet->data[2]), &id, 2);
-
-    // byte 4 bit 0
-    packet->data[4] = header->qr << 7;
-    // byte 4 bits 1-4 (15 = 0b00001111)
-    packet->data[4] = packet->data[4] & (header->opcode << 3);
-    // byte 4 bit 5
-    packet->data[4] = packet->data[4] & (header->aa << 2);
-    // byte 4 bit 6
-    packet->data[4] = packet->data[4] & (header->tc << 1);
-    // byte 4 bit 7
-    packet->data[4] = packet->data[4] & (header->rd);
-    // byte 5 bit 0
-    packet->data[5] = header->ra << 7;
-    // byte 5 bits 4-7 
-    packet->data[5] = packet->data[5] & (header->rcode);
-
-    memset(&(packet->data[6]), 0, 2);
-    memset(&(packet->data[8]), 0, 2);
-    memset(&(packet->data[10]), 0, 2);
-    memset(&(packet->data[12]), 0, 2);
-
-    return packet;
-}
 
 /*  Creates a header with RCODE = 4, signifying unimplemented request   */
 dns_header_t *create_error_header(int id){
@@ -291,10 +253,20 @@ void free_packet(dns_packet_t *packet){
     free(packet);
 }
 
-/*  Frees an array of pointers */
-void free_array(void **array, int num_items){
+/*  Frees an array of pointers to questions   */
+void free_question_array(question_t **array, int num_items){
 
     for (int i = 0; i < num_items; i++){
+        free(array[i]);
+    }
+    free(array);
+}
+
+/*  Frees an array of pointers to RRs   */
+void free_RR_array(RR_t **array, int num_items){
+
+    for (int i = 0; i < num_items; i++){
+        free(array[i]->rdata);
         free(array[i]);
     }
     free(array);
@@ -303,13 +275,242 @@ void free_array(void **array, int num_items){
 /*  Frees a message */
 void free_message(message_t *msg){
 
-    free_array((void **)msg->questions, msg->header->qdcount);
-    free_array((void **)msg->answers, msg->header->ancount);
-    free_array((void **)msg->authorities, msg->header->nscount);
-    free_array((void **)msg->additional, msg->header->arcount);
+    free_question_array(msg->questions, msg->header->qdcount);
+    free_RR_array(msg->answers, msg->header->ancount);
+    free_RR_array(msg->authorities, msg->header->nscount);
+    free_RR_array(msg->additional, msg->header->arcount);
     free(msg->header);
     free(msg);
 }
 
-// TODO: Write functions that create a binary packet from a message struct
+/*  Creates a binary DNS packet from the provided DNS message. Inverse of parse_packet()    
+    Does not use message compression                                                        */                               
+dns_packet_t *create_packet(message_t *msg){
 
+    dns_packet_t *packet = (dns_packet_t *)malloc(sizeof(dns_packet_t));
+    assert(packet);
+
+    packet->len = 0;
+    uint8_t *header = create_header_sequence(msg->header);
+    packet->len += HEADER_LEN;
+
+    uint8_t **questions = (uint8_t **)malloc(sizeof(uint8_t *)*(msg->header->qdcount));
+    assert(questions);
+    uint8_t **answers = (uint8_t **)malloc(sizeof(uint8_t *)*(msg->header->ancount));
+    assert(answers);
+    uint8_t **authorities = (uint8_t **)malloc(sizeof(uint8_t *)*(msg->header->nscount));
+    assert(authorities);
+    uint8_t **additional = (uint8_t **)malloc(sizeof(uint8_t *)*(msg->header->arcount));
+    assert(additional);
+
+   // Arrays to hold the sizes of each byte sequence
+    int *questions_sizes = (int *)malloc(sizeof(int)*(msg->header->qdcount));
+    assert(questions_sizes);
+    int *answers_sizes = (int *)malloc(sizeof(int)*(msg->header->ancount));
+    assert(answers_sizes);
+    int *authorities_sizes = (int *)malloc(sizeof(int)*(msg->header->nscount));
+    assert(authorities_sizes);
+    int *additional_sizes = (int *)malloc(sizeof(int)*(msg->header->arcount));
+    assert(additional_sizes);
+
+    for (int i = 0; i < msg->header->qdcount; i++){
+        questions[i] = create_question_sequence(msg->questions[i], &(questions_sizes[i]));
+        packet->len += questions_sizes[i];
+    }
+
+    for (int i = 0; i < msg->header->ancount; i++){
+        answers[i] = create_RR_sequence(msg->answers[i], &(answers_sizes[i]));
+        packet->len += answers_sizes[i];
+    }
+
+    for (int i = 0; i < msg->header->nscount; i++){
+        authorities[i] = create_RR_sequence(msg->authorities[i], &(authorities_sizes[i]));
+        packet->len += authorities_sizes[i];
+    }
+
+    for (int i = 0; i < msg->header->arcount; i++){
+        additional[i] = create_RR_sequence(msg->additional[i], &(additional_sizes[i]));
+        packet->len += additional_sizes[i];
+    }
+
+    packet->data = (uint8_t *)malloc(sizeof(uint8_t)*(packet->len + 2)); // +2 to include length
+    assert(packet->data);
+
+    int offset = 0;
+
+    uint16_t len = htons(packet->len);
+    memcpy(&(packet->data[offset]), &len, sizeof(uint16_t));
+    offset += sizeof(uint16_t);
+
+    memcpy(&(packet->data[offset]), header, HEADER_LEN);
+    offset += HEADER_LEN;
+    free(header);
+
+    for (int i = 0; i < msg->header->qdcount; i++){
+        memcpy(&(packet->data[offset]), questions[i], questions_sizes[i]);
+        offset += questions_sizes[i];
+        free(questions[i]);
+    }
+
+    for (int i = 0; i < msg->header->ancount; i++){
+        memcpy(&(packet->data[offset]), answers[i], answers_sizes[i]);
+        offset += answers_sizes[i];
+        free(answers[i]);
+    }
+
+    for (int i = 0; i < msg->header->nscount; i++){
+        memcpy(&(packet->data[offset]), authorities[i], authorities_sizes[i]);
+        offset += authorities_sizes[i];
+        free(authorities[i]);
+    }
+
+    for (int i = 0; i < msg->header->arcount; i++){
+        memcpy(&(packet->data[offset]), additional[i], additional_sizes[i]);
+        offset += additional_sizes[i];
+        free(additional[i]);
+    }
+
+    free(questions);
+    free(answers);
+    free(authorities);
+    free(additional);
+    free(questions_sizes);
+    free(answers_sizes);
+    free(authorities_sizes);
+    free(additional_sizes);
+    
+    return packet;
+}
+
+
+/*  Creates and a byte sequence representing the given header.  */
+uint8_t *create_header_sequence(dns_header_t *header){
+
+    uint8_t *sequence = (uint8_t *)calloc(HEADER_LEN, sizeof(uint8_t));
+    assert(sequence);
+
+    uint16_t id = htons(header->id);
+    memcpy(&(sequence[0]), &id, 2); 
+
+    // byte 4 bit 0
+    sequence[2] = header->qr << 7;
+    // byte 4 bits 1-4 (15 = 0b00001111)
+    sequence[2] = sequence[2] | (header->opcode << 3);
+    // byte 4 bit 5
+    sequence[2] = sequence[2] | (header->aa << 2);
+    // byte 4 bit 6
+    sequence[2] = sequence[2] | (header->tc << 1);
+    // byte 4 bit 7
+    sequence[2] = sequence[2] | (header->rd);
+    // byte 5 bit 0
+    sequence[3] = header->ra << 7;
+    // byte 5 bits 4-7 
+    sequence[3] = sequence[3] | (header->rcode);
+
+    uint16_t qdcount = htons(header->qdcount);
+    memcpy(&(sequence[4]), &qdcount, 2);
+
+    uint16_t ancount = htons(header->ancount);
+    memcpy(&(sequence[6]), &ancount, 2);
+
+    uint16_t nscount = htons(header->nscount);
+    memcpy(&(sequence[8]), &nscount, 2);
+
+    uint16_t arcount = htons(header->arcount);
+    memcpy(&(sequence[10]), &arcount, 2);
+
+    return sequence;
+}
+
+/*  Creates a byte sequence representing the given resource record. Sets total_size to size of 
+    byte sequence   */
+uint8_t *create_RR_sequence(RR_t *RR, int *total_size){
+
+    uint8_t *sequence = create_name_sequence(RR->name, total_size);
+    int offset = *total_size; // gets length of the name sequence only
+
+    int size = offset + 3*sizeof(uint16_t) + sizeof(uint32_t) + RR->rdlength; // size of all fields
+
+    sequence = (uint8_t *)realloc(sequence, size);
+    assert(sequence);
+
+    uint16_t type = htons(RR->type);
+    memcpy(&(sequence[offset]), &type, sizeof(uint16_t));
+    offset += sizeof(uint16_t);
+
+    uint16_t class = htons(RR->class);
+    memcpy(&(sequence[offset]), &class, sizeof(uint16_t));
+    offset += sizeof(uint16_t);
+
+    uint32_t ttl = htonl(RR->ttl);
+    memcpy(&(sequence[offset]), &ttl, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+
+    uint16_t rdlength = htons(RR->rdlength);
+    memcpy(&(sequence[offset]), &rdlength, sizeof(uint16_t));
+    offset += sizeof(uint16_t);
+
+    memcpy(&(sequence[offset]), RR->rdata, RR->rdlength);
+    offset += RR->rdlength;
+
+    (*total_size) = offset;
+    return sequence;
+}
+
+/*  Creates a byte sequence representing the given question. Sets total_size to size of byte 
+    sequence    */
+uint8_t *create_question_sequence(question_t *question, int *total_size){
+
+    uint8_t *sequence = create_name_sequence(question->qname, total_size);
+    int offset = *total_size; // gets length of the name sequence only
+
+    int size = offset + 2*sizeof(uint16_t); // size of all fields (type, class)
+
+    sequence = (uint8_t *)realloc(sequence, size); 
+    assert(sequence);
+
+    uint16_t qtype = htons(question->qtype);
+    memcpy(&(sequence[offset]), &qtype, sizeof(uint16_t));
+    offset += sizeof(uint16_t);
+
+    uint16_t qclass = htons(question->qclass);
+    memcpy(&(sequence[offset]), &qclass, sizeof(uint16_t));
+    offset += sizeof(uint16_t);
+
+    (*total_size) = offset;
+    return sequence;
+}
+
+/*  Creates a byte sequence representing the given string (domain name). Uses the label format, 
+    where a length octet precedes each label. Sets total_size to size of byte sequence    */
+uint8_t *create_name_sequence(char *name, int *total_size){
+
+    // We have max size 2*(MAX_DNAME_CHARS) as theoretically, each char could have a preceding
+    // octet
+    uint8_t *sequence = (uint8_t *)calloc(2*MAX_DNAME_CHARS,sizeof(uint8_t)); 
+    assert(sequence);
+
+    int offset = 0;
+    const char delim[2] = ".";
+    char *token = strtok(name, delim);
+
+    while (token){
+        uint8_t len = strlen(token);
+        memcpy(&(sequence[offset++]), &len, sizeof(uint8_t));
+        memcpy(&(sequence[offset]), token, len);
+        offset += len;
+
+        token = strtok(NULL, delim); // get next token;
+    }
+
+    offset++; // to count final zero byte
+
+    uint8_t *trimmed_sequence = (uint8_t *)malloc(sizeof(uint8_t)*offset);
+    assert(trimmed_sequence);
+
+    memcpy(trimmed_sequence, sequence, offset);
+    free(sequence);
+
+    (*total_size) = offset;
+    return trimmed_sequence;
+}
