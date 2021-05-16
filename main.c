@@ -58,8 +58,8 @@ dns_packet_t *create_error_packet(int id){
     return packet;
 }
 
-/*  Examines given query and returns 0 if it is AAAA, -1 otherwise, writing request to
-    log as well  */
+/*  Examines the first question of given query and returns 0 if it is AAAA, -1 otherwise. 
+    Writes request to log as well.  */
 int check_query(message_t *query){
 
     char buffer[MAX_LOG_ENTRY];
@@ -149,7 +149,7 @@ void process_upstream_response(struct pollfd *fds, nfds_t *nfds, cache_t *cache,
     process_response(response);
 
     if (response->header->ancount){
-        add_cache_entry(cache, response, response_packet);
+        add_cache_entry(cache, response);
     }
     // send back to client
     send_response(fds[i-1].fd, response_packet);
@@ -159,9 +159,10 @@ void process_upstream_response(struct pollfd *fds, nfds_t *nfds, cache_t *cache,
 
     if (!(response->header->ancount)){
         // response had no answer and was not cached, so free it
-        free_packet(response_packet);
         free_message(response);
-    }   
+    }
+
+    free_packet(response_packet);   
 }
 
 /*  Main server loop, using poll() for non-blocking operation  */
@@ -223,5 +224,5 @@ int main(int argc, char **argv){
 }
 
 
-/* TO DO: check why TASK 3 ve1 failing log entry. Decrement TTL for cache (using create_packet()). 
+/* TO DO: Decrement TTL for cache (using create_packet()). 
     Fix log entries for cache eviction. Tidy up and refactor code (get parser.c < 500 lines). */

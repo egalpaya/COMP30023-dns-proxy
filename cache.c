@@ -30,24 +30,17 @@ cache_t *create_cache(){
     return cache;
 }
 
-/*  Adds the given response and packet to the cache, kicking out the entry with lowest TTL  */
-void add_cache_entry(cache_t *cache, message_t *response, dns_packet_t *packet){
+/*  Adds the given response to the cache, kicking out the entry with lowest TTL  */
+void add_cache_entry(cache_t *cache, message_t *response){
 
     cache_entry_t *entry = (cache_entry_t *)malloc(sizeof(cache_entry_t));
     assert(entry);
 
     entry->response = response;
-    entry->packet = packet;
     
     time_t curr_time;
     time(&curr_time);
     entry->last_accessed = curr_time;
-
-    if (cache->num_items < CACHE_SIZE){
-
-        cache->entries[cache->num_items++] = entry;
-        return;
-    }
 
     // find the lowest TTL entry (or first one with 0 TTL)
     int lowest_ttl = INT_MAX;
@@ -62,7 +55,13 @@ void add_cache_entry(cache_t *cache, message_t *response, dns_packet_t *packet){
         }
     }
 
-    // kick it out
+    if (lowest_ttl != 0 && cache->num_items < CACHE_SIZE){
+        // there is free space in cache
+        cache->entries[cache->num_items++] = entry;
+        return;
+    }
+    
+    // kick out the expired or lowest ttl entry
     cache_entry_t *old_entry = cache->entries[index];
     cache->entries[index] = entry;
 
@@ -77,7 +76,6 @@ void add_cache_entry(cache_t *cache, message_t *response, dns_packet_t *packet){
     write_log(buf);
 
     free_message(old_entry->response);
-    free_packet(old_entry->packet);
     free(old_entry);
 }
 
@@ -102,24 +100,20 @@ void update_ttl(cache_entry_t *entry){
 dns_packet_t *get_cache_entry(cache_t *cache, message_t *query){
 
     dns_packet_t *response_packet = NULL;
-
+    
     for (int i = 0; i < cache->num_items; i++){
         
+        update_ttl(cache->entries[i]);
+
         if (compare_questions(query->questions[0], cache->entries[i]->response->questions[0])
             && cache->entries[i]->response->answers[0]->ttl > 0){
             // matching, valid record exists
-       
+
             // replace ID
             cache->entries[i]->response->header->id = query->header->id;
-            update_ttl(cache->entries[i]);
 
             // generate response packet
             response_packet = create_packet(cache->entries[i]->response);
-
-            // swap with old
-            dns_packet_t *old_packet = cache->entries[i]->packet;
-            cache->entries[i]->packet = response_packet;
-            free_packet(old_packet);
 
             // write to log
             char buf[MAX_LOG_ENTRY];
