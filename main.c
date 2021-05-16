@@ -58,25 +58,27 @@ dns_packet_t *create_error_packet(int id){
     return packet;
 }
 
-/*  Examines given query and returns 0 if it is AAAA, -1 otherwise, writing to log as well  */
+/*  Examines given query and returns 0 if it is AAAA, -1 otherwise, writing request to
+    log as well  */
 int check_query(message_t *query){
 
     char buffer[MAX_LOG_ENTRY];
     char name[MAX_DNAME_CHARS];
-    int success;
 
-    if (query->header->qdcount && query->questions[0]->qtype == 28){
+    if (query->header->qdcount){
         strcpy(name, query->questions[0]->qname);
         remove_trailing_dot(name);
         snprintf(buffer, MAX_LOG_ENTRY, "requested %s\n", name);
-        success = 0;
-    } else {
-        snprintf(buffer, MAX_LOG_ENTRY, "unimplemented request\n");
-        success = -1;
+        write_log(buffer);
     }
 
-    write_log(buffer);
-    return success;
+    if (query->questions[0]->qtype != 28){
+        snprintf(buffer, MAX_LOG_ENTRY, "unimplemented request\n");
+        write_log(buffer);
+        return -1;
+    }
+
+    return 0;
 }
 
 void process_response(message_t *msg){
@@ -219,3 +221,7 @@ int main(int argc, char **argv){
     run_server(argv);
 
 }
+
+
+/* TO DO: check why TASK 3 ve1 failing log entry. Decrement TTL for cache (using create_packet()). 
+    Fix log entries for cache eviction. Tidy up and refactor code (get parser.c < 500 lines). */
