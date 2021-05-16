@@ -144,13 +144,15 @@ void process_upstream_response(struct pollfd *fds, nfds_t *nfds, cache_t *cache,
     dns_packet_t *response_packet = read_packet(fds[i].fd);
     close(fds[i].fd);
 
-    // process it and add it to cache if an answer is found
+    // parse it and add it to cache if an answer is found
     message_t *response = parse_packet(response_packet);
-    process_response(response);
 
     if (response->header->ancount){
         add_cache_entry(cache, response);
     }
+    
+    process_response(response);
+
     // send back to client
     send_response(fds[i-1].fd, response_packet);
 
