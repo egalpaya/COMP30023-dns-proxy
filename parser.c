@@ -355,7 +355,7 @@ dns_packet_t *create_packet(message_t *msg){
     free(answers_sizes);
     free(authorities_sizes);
     free(additional_sizes);
-    
+
     return packet;
 }
 
@@ -461,15 +461,19 @@ uint8_t *create_question_sequence(question_t *question, int *total_size){
 /*  Creates a byte sequence representing the given string (domain name). Uses the label format, 
     where a length octet precedes each label. Sets total_size to size of byte sequence    */
 uint8_t *create_name_sequence(char *name, int *total_size){
-
+    
     // We have max size 2*(MAX_DNAME_CHARS) as theoretically, each char could have a preceding
     // octet
     uint8_t *sequence = (uint8_t *)calloc(2*MAX_DNAME_CHARS,sizeof(uint8_t)); 
     assert(sequence);
 
+    // make a copy, as strtok modifies the string
+    char name_cpy[MAX_DNAME_CHARS];
+    strcpy(name_cpy, name);
+
     int offset = 0;
     const char delim[2] = ".";
-    char *token = strtok(name, delim);
+    char *token = strtok(name_cpy, delim);
 
     while (token){
         uint8_t len = strlen(token);
@@ -487,7 +491,7 @@ uint8_t *create_name_sequence(char *name, int *total_size){
 
     memcpy(trimmed_sequence, sequence, offset);
     free(sequence);
-
+    
     (*total_size) = offset;
     return trimmed_sequence;
 }
