@@ -32,7 +32,7 @@ format:
 	clang-format -i *.c *.h
 
 clean:
-	rm -f *.o
-
-clobber:
 	rm -f *.o $(BIN_PHASE1) $(BIN_PHASE2)
+
+tidy:
+	rm -f *.o 
