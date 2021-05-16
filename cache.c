@@ -30,8 +30,7 @@ cache_t *create_cache(){
     return cache;
 }
 
-/*  Adds the given response and packet to the cache, kicking out the "most expired entry",
-    defined by the lowest time to live (updated to reflect current time) */
+/*  Adds the given response and packet to the cache, kicking out the entry with lowest TTL  */
 void add_cache_entry(cache_t *cache, message_t *response, dns_packet_t *packet){
 
     cache_entry_t *entry = (cache_entry_t *)malloc(sizeof(cache_entry_t));
@@ -42,7 +41,7 @@ void add_cache_entry(cache_t *cache, message_t *response, dns_packet_t *packet){
     
     time_t curr_time;
     time(&curr_time);
-    entry->arrival_time = curr_time;
+    entry->last_accessed = curr_time;
 
     if (cache->num_items < CACHE_SIZE){
 
@@ -50,15 +49,15 @@ void add_cache_entry(cache_t *cache, message_t *response, dns_packet_t *packet){
         return;
     }
 
-    // find the most expired entry
-    int most_expired = INT_MAX;
+    // find the lowest TTL entry (or first one with 0 TTL)
+    int lowest_ttl = INT_MAX;
     int index = -1;
     for (int i = 0; i < cache->num_items; i++){
         
-        int ttl = get_ttl(cache->entries[i]);
+        update_ttl(cache->entries[i]);
 
-        if (ttl < most_expired){
-            most_expired = ttl;
+        if (cache->entries[i]->response->answers[0]->ttl < lowest_ttl){
+            lowest_ttl = cache->entries[i]->response->answers[0]->ttl;
             index = i;
         }
     }
@@ -82,16 +81,20 @@ void add_cache_entry(cache_t *cache, message_t *response, dns_packet_t *packet){
     free(old_entry);
 }
 
-/*  Returns the updated TTL of the first answer of the given cache entry. If the returned value
-    is -ve, the record has expired. */
-int get_ttl(cache_entry_t *entry){
+/*  Updates the TTL and last accessed time of the first answer of the given cache entry. */
+void update_ttl(cache_entry_t *entry){
 
     time_t curr_time;
     time(&curr_time);
-    double diff = difftime(curr_time, entry->arrival_time);
-    int ttl = entry->response->answers[0]->ttl;
+    double diff = difftime(curr_time, entry->last_accessed);
+    entry->last_accessed = curr_time;
 
-    return ttl - diff;;
+    // avoid issues with unsigned ints
+    if (entry->response->answers[0]->ttl < diff){
+        entry->response->answers[0]->ttl = 0;
+    } else {
+        entry->response->answers[0]->ttl -= diff;
+    }
 }
 
 /*  Checks whether the given query has a valid answer record in the cache, determined by comparing 
@@ -101,23 +104,30 @@ dns_packet_t *get_cache_entry(cache_t *cache, message_t *query){
     dns_packet_t *response_packet = NULL;
 
     for (int i = 0; i < cache->num_items; i++){
-
+        
         if (compare_questions(query->questions[0], cache->entries[i]->response->questions[0])
-            && get_ttl(cache->entries[i]) > 0){
-
+            && cache->entries[i]->response->answers[0]->ttl > 0){
             // matching, valid record exists
-            response_packet = cache->entries[i]->packet;
+       
+            // replace ID
+            cache->entries[i]->response->header->id = query->header->id;
+            update_ttl(cache->entries[i]);
 
-            // replace id of packet with id of query 
-            uint16_t id = htons(query->header->id);
-            memcpy(&(response_packet->data[2]), &id, 2); // id field starts at byte 2, after length field
+            // generate response packet
+            response_packet = create_packet(cache->entries[i]->response);
+
+            // swap with old
+            dns_packet_t *old_packet = cache->entries[i]->packet;
+            cache->entries[i]->packet = response_packet;
+            free_packet(old_packet);
 
             // write to log
             char buf[MAX_LOG_ENTRY];
             char name[MAX_DNAME_CHARS];
             char timestamp[MAX_TIMESTAMP_LEN];
-            get_timestamp(timestamp, cache->entries[i]->arrival_time +
-                                    cache->entries[i]->response->answers[0]->ttl);
+            time_t curr_time;
+            time(&curr_time);
+            get_timestamp(timestamp, curr_time + cache->entries[i]->response->answers[0]->ttl);
             strcpy(name, cache->entries[i]->response->questions[0]->qname);
             remove_trailing_dot(name);
             snprintf(buf, MAX_LOG_ENTRY, "%s expires at %s\n", name, timestamp);
