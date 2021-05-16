@@ -56,8 +56,9 @@ void *read_RR(dns_packet_t *packet, uint16_t *byte_offset){
         uint16_t pointer; 
         cpy_int_field(packet, byte_offset, 2, &pointer);
 
-        // remove 2 leading bits (NOTE 16383 = 0b0011111111111111)
-        pointer = pointer & 16383;
+        pointer = pointer & 16383;  // remove 2 leading bits (NOTE 16383 = 0b0011111111111111)
+        pointer += 2;   // account for 2 length bytes at start of packet
+
         read_domain_name(packet, &pointer, rr->name);
     } else {
         read_domain_name(packet, byte_offset, rr->name);
