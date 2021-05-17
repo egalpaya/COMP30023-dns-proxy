@@ -5,16 +5,14 @@
 /*  Functions to manage connections/sockets                                                      */
 /*************************************************************************************************/
 #include <stdio.h>
-#include <stdint.h>
 #include <stdlib.h>
-#include <assert.h>
-#include <netdb.h>
 #include <string.h>
+#include <assert.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <unistd.h>
-#include <poll.h>
-#include "utils.h"
-#include "parser.h"
+
+#include "connections.h"
 
 #define PORT "8053"
 #define BACKLOG 20
@@ -124,7 +122,7 @@ int connect_client(int listener_fd){
 
 /*  Forwards a packet to the upstream server. Returns a socket/connection file descriptor for the
     connection to upstream server   */
-int forward_packet(char **argv, dns_packet_t *packet){
+int forward_packet(char **argv, packet_t *packet){
     
     int upstream_fd, n;
 
@@ -133,7 +131,7 @@ int forward_packet(char **argv, dns_packet_t *packet){
         return -1;
     }
     
-    // Send the packet in one go
+    // Send the packet in one go. +2 for length bytes
     if ((n = send(upstream_fd, packet->data, packet->len + 2, 0)) != packet->len + 2){
         perror("send - upstream");
         return -1;
@@ -142,18 +140,16 @@ int forward_packet(char **argv, dns_packet_t *packet){
     return upstream_fd;
 }
 
-/*  Send the final response downstream and close connection  */
-void send_response(int conn_fd, dns_packet_t *packet){
+/*  Send a response downstream */
+void send_response(int conn_fd, packet_t *packet){
 
     int n;
 
-    // Send the packet in one go
+    // Send the packet in one go. +2 for length bytes
     if ((n = send(conn_fd, packet->data, packet->len + 2, 0)) != packet->len + 2){
         perror("send - downstream");
         return;
     }
-
-    close(conn_fd);
 }
 
 
@@ -163,7 +159,7 @@ void send_response(int conn_fd, dns_packet_t *packet){
     Initialise the second to -1, making poll() ignore at first, until later changed.  */
 void add_fd(int fd, struct pollfd **fds, nfds_t *nfds, int *capacity){
 
-    // If at capacity, quadruple size of array ( - 2 reflects adding two entries each time)
+    // If at capacity, quadruple size of array ( -2 reflects adding two entries each time)
     if (*nfds > *capacity - 2){
         *capacity *= 4;
 

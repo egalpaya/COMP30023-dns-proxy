@@ -4,11 +4,10 @@
 /*  993413                                                                                       */
 /*  Various Utility Functions and Structures                                                     */
 /*************************************************************************************************/
-#include <time.h>
 #include <stdio.h>
 #include <string.h>
-#include "utils.h"
 
+#include "utils.h"
 
 /*  Writes the current timestamp to the given string buffer */
 void get_current_timestamp(char *str){
@@ -28,7 +27,7 @@ void get_timestamp(char *str, time_t time){
 }   
 
 /*  Writes a string to the log, prepended by a timestamp    */
-void write_log(char *str){
+void write_log(const char *str){
 
     char entry[MAX_TIMESTAMP_LEN+strlen(str)+1];
     get_current_timestamp(entry);

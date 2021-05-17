@@ -7,8 +7,9 @@
 #ifndef CONNECTIONS_H
 #define CONNECTIONS_H
 
-#include "utils.h"
 #include <poll.h>
+
+#include "utils.h"
 
 /*  Creates a listener socket on the local IP and defined port. Sets it to listen.
     Returns the file descriptor */
@@ -22,10 +23,10 @@ int connect_client(int listener_fd);
 
 /*  Forwards a packet to the upstream server. Returns a socket/connection file descriptor for the
     connection to upstream server   */
-int forward_packet(char **argv, dns_packet_t *packet);
+int forward_packet(char **argv, packet_t *packet);
 
-/*  Send the final response downstream and close connection  */
-void send_response(int conn_fd, dns_packet_t *packet);
+/*  Send a response downstream  */
+void send_response(int conn_fd, packet_t *packet);
 
 /*  Adds a downstream connection/socket to pollfd array. For each downstream connection, we may 
     have an associated upstream connection fetching the response. Therefore we shall add two
@@ -35,7 +36,5 @@ void add_fd(int fd, struct pollfd **fds, nfds_t *nfds, int *capacity);
 
 /* Removes the two consecutive entries from pollfd array */
 void delete_fd(int index, struct pollfd **fds, nfds_t *nfds);
-
-void get_response2(int conn_fd);
 
 #endif
