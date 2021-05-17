@@ -195,9 +195,9 @@ void run_server(char **argv){
     add_fd(listener_fd, &fds, &nfds, &capacity);
 
     cache_t *cache = create_cache();
-    int iter = 0;
-    while (iter < 75){
-        iter++;
+    
+    while (1){
+
         if (poll(fds, nfds, MAX_TIMEOUT_LEN) < 0){
             perror("poll");
             exit(EXIT_FAILURE);
