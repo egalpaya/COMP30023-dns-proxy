@@ -36,12 +36,15 @@ void update_ttl(cache_entry_t *entry);
 
 /*  Checks whether the given query has a valid answer record in the cache, determined by comparing 
     the first question of the records. Returns the packet if it exists, else returns null */
-dns_packet_t *get_cache_entry(cache_t *cache, message_t *query);
+packet_t *get_cache_entry(cache_t *cache, message_t *query);
 
 /*  Compares two questions, returns 1 if they are identical, 0 otherwise   */
 int compare_questions(question_t *q1, question_t *q2);
 
-void print_cache(cache_t *cache);
+/*  Frees all memory associated with cache  */
+void free_cache(cache_t *cache);
 
+/*  Prints cache entries - for testing purposes */
+void print_cache(cache_t *cache);
 
 #endif
